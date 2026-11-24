@@ -1,0 +1,85 @@
+Daily task: find true stories of human resilience and indomitable spirit that have a positive ending, and log them in the Claude Doc "Resilience Stories Log" (doc id 95d7169d-5e20-4b88-aa1f-593305bf9b8e, link https://claude.ai/code/artifact/95d7169d-5e20-4b88-aa1f-593305bf9b8e) AND, when the run adds stories, in the file resilience-log.csv in the GitHub repository hiya-g/Test (branch master). This task runs every 6 hours.
+
+1. SEARCH. Find stories published in the last 72 hours (relative to when this run starts, Europe/Berlin time) by these outlets ONLY.
+- Tier A: feed and article pages confirmed readable from this environment (re-tested 2026-11-18; CBS On the Road, Irish Examiner and MPR News added 2026-11-22). Read every one of these feeds each run:
+  - Al Jazeera English: https://www.aljazeera.com/xml/rss/all.xml and https://www.aljazeera.com/features/ (open article links without the "?traffic_source=rss" suffix)
+  - CBS News: https://www.cbsnews.com/latest/rss/main and https://www.cbsnews.com/latest/rss/us and https://cbsnews.com/latest/rss/evening-news-on-the-road (Steve Hartman "On the Road" features; most items are weeks old, so check dates)
+  - ABC News (US): https://abcnews.com/abcnews/topstories
+  - ABC News (Australia): https://www.abc.net.au/news/feed/51120/rss.xml
+  - Euronews: https://www.euronews.com/rss
+  - Positive News (UK): https://www.positive.news/feed/
+  - PBS NewsHour (US): https://www.pbs.org/newshour/feeds/rss/headlines
+  - MPR News (US): https://www.mprnews.org/feed/homepage (skip sports items and podcast trailers)
+  - Fox News (US): https://moxie.foxnews.com/google-publisher/latest.xml
+  - RTÉ (Ireland): https://www.rte.ie/feeds/rss/?index=/news/
+  - The Irish Times (Ireland): https://www.irishtimes.com/arc/outboundfeeds/feed-irish-news/?outputType=xml
+  - Irish Examiner (Ireland): https://www.irishexaminer.com/feed/35-top_news.xml
+  - Global News (Canada): https://globalnews.ca/feed/
+  - Kyiv Independent (Ukraine): https://kyivindependent.com/news-archive/rss/
+  - Premium Times (Nigeria): https://www.premiumtimesng.com/feed (skip items marked "Promoted Stories")
+  - Daily Maverick (South Africa): https://www.dailymaverick.co.za/dmrss/
+  - Dawn (Pakistan): https://www.dawn.com/feeds/home
+- Tier B (usually blocked from this environment; use a story only if its article page itself opens): Reuters, AP (Associated Press), AFP, BBC, The Guardian, The New York Times, The Washington Post, The Wall Street Journal, Financial Times, The Economist, NPR (feed: https://feeds.npr.org/1001/rss.xml), CNN, Der Spiegel, RNZ (feed: https://www.rnz.co.nz/rss/national.xml), South China Morning Post (feed: https://www.scmp.com/rss/91/feed).
+Some feeds are long and come back truncated; if a feed is cut off, read the rest (e.g. with offset reads) before judging it. Do not rely on a model summary of an unread part of a feed for dates.
+
+Method: web search is weak at date-limited queries, so read the outlets' feeds directly with WebFetch (or a web-fetch agent if WebFetch is not available), then open each candidate article.
+Also run a few web searches for recent survival, rescue, recovery and reunion stories to catch items the feeds miss.
+AP stories republished in full on abcnews.com (URLs containing "wireStory") count as AP reporting; list the outlet as "AP (via ABC News)".
+Open each candidate article to confirm the outlet, publication date and facts; a search snippet or feed description is not enough. If WebFetch reports a site is blocked or disallowed, do not try to reach it any other way (no curl, Python, mirrors or caches); move on.
+
+2. QUALIFY. Include a story only if ALL of these hold:
+- A real, named person or group got through serious adversity (illness, injury, disaster, war, poverty, loss, a long setback).
+- The positive outcome has already happened. Exclude hoped-for endings, fundraising appeals, "still fighting" stories.
+- It is original reporting by one of the outlets above (or AP via ABC News as described). Exclude sponsored content, opinion columns, and pieces that only rewrite a viral social media post.
+- The publication date is confirmed as within the last 72 hours. If unsure, leave it out.
+Pick up to 5, ranked by how substantial the adversity and the outcome are. Fewer is fine. Never pad with weak stories. Merge duplicate coverage of the same story into one entry using the best source. Skip any story already in the doc's table or already in resilience-log.csv (check headlines and URLs in both; the 72-hour window overlaps earlier runs).
+
+3. WRITE TO THE DOC. Use the Claude Docs tools (load them via tool search; call guide with topic.index and topic.editing first). Read the doc, find the table under the "## Stories" heading (columns: Date published | Story | Outlet | What happened | How it ended | Themes | Place). Insert one row per story at the TOP of the table, directly under the header row, so the table stays newest first. Spell all seven cells:
+- Date published: YYYY-MM-DD, plain text.
+- Story: the article headline as a markdown link to the article URL.
+- Outlet: outlet name.
+- What happened: one factual sentence on the adversity, under 25 words.
+- How it ended: one factual sentence on the outcome, under 25 words.
+- Themes: see THEMES below.
+- Place: see PLACE below.
+If the table still contains the placeholder row "No entries yet", delete it. If no story qualifies, add one row: today's date | No qualifying stories | — | — | — | — | — — but only if the table does not already have a "No qualifying stories" row with today's date (this task runs several times a day; add at most one such row per day).
+Do not change any other part of the doc.
+
+PLACE. Where the positive outcome happened (the rescue, treatment, reunion, release, award, new home or achievement), taken only from what the article says.
+- Format "City, Country", using a city or town the article names (e.g. "Brisbane, Australia", "Augusta, United States"). Never use a state, province, region or island as the city; if the article names no city or town, write the country alone (e.g. "Australia").
+- Use common English country names (United States, United Kingdom, Australia, South Africa). For Gaza or the West Bank the country is "Palestine" (e.g. "Hebron, Palestine").
+- When the story spans places, use where the outcome happened (e.g. treatment abroad → the treatment city). At sea: where survivors were rescued or brought ashore.
+- Never leave it blank. If the article names no place at all, write "Not stated".
+
+THEMES. The theme list is: Resilience, Courage, Hope, Generosity, Survival, Human Connection, Determination, Family and Love, Recovery.
+Resilience is the subject of the whole log (every story qualifies as resilience), so it is NEVER written in the Themes column. Use only the other eight values, as defined here:
+- Courage: the person knowingly faced danger or serious personal risk to act (speaking out, going back despite threats, saving someone, leaving an abuser).
+- Hope: a new start after loss: a new home, job or life after homelessness, displacement, addiction, abuse or bereavement; or a return home after exile or displacement.
+- Generosity: someone outside the family gave something decisive (an organ, a home, money, surrogacy, donated care, taking the person in), OR the person now helps others because of what they went through.
+- Survival: the person lived through an immediate threat to life (disaster, attack, accident, lost at sea or in the bush, captivity in war or by kidnappers or pirates, or an illness the article says was life-threatening) and was rescued, freed or pulled through.
+- Human Connection: a group, community, club, volunteers or strangers gave support or belonging.
+- Determination: the person reached a goal through their own sustained effort (competing, performing, graduating, returning to work or study, building or creating something, winning office).
+- Family and Love: a relative or partner is central to the outcome, or the outcome is a family reunion or a marriage.
+- Recovery: the person lived through serious illness or major surgery and came through treatment (cancer remission, post-transplant, post-surgery return to normal life). Use Survival instead when the article says the illness was immediately life-threatening or when the person was rescued or freed from an acute event; Recovery is for the slower return through treatment.
+Rules: a story can have 0, 1 or several themes. Assign a theme only when the article's reported facts directly show it; never force or infer one. Multiple themes are separated by "; ", strongest first. If none applies, write "—". Never write a value that is not one of the eight above.
+
+EMERGING THEMES. If a story has a strong theme that is not in the list, do NOT write it into the Themes column and do NOT silently drop it. Tag the story only with whichever of the eight themes apply (or "—"), and report the candidate theme in the FLAG FOR REVIEW section of your final message: the proposed theme name, a one-line definition, and the headline(s) of the story or stories that show it. Do not add new theme values to the doc or this list; the owner decides.
+
+Style: facts only, taken from the article. Plain, direct sentences. No sentimental or hype language ("heartwarming", "inspiring", "against all odds"), no speculation, no filler.
+
+4. WRITE TO THE CSV, ONLY IF THIS RUN ADDED STORIES TO THE DOC. If this run added no story rows to the doc (it found nothing qualifying, or every candidate was already in the doc or the CSV), do not touch the CSV: do not attach or clone the repository, do not add a "No qualifying stories" row, do not commit, do not push. Skip to FINISH.
+If this run added one or more stories, write the same rows (the same stories, in the same order, with identical wording in the What happened, How it ended, Themes and Place cells) to resilience-log.csv in the GitHub repository hiya-g/Test, branch master.
+- Get the repo: call add_repo (Claude_Code_Remote tools; load them via tool search if needed) with owner "hiya-g", repo "Test" and access "push", then clone it and pull the latest master as the tool's result instructs. Work only inside that checkout.
+- Read resilience-log.csv. Its header row is exactly: Date published,Story,URL,Outlet,What happened,How it ended,Themes,Place
+- Format: standard CSV, CRLF line endings, a cell is wrapped in double quotes only when it contains a comma, a double quote or a line break (double quotes inside a cell are doubled). One row per story, inserted directly under the header row, newest first.
+- Cells: Date published YYYY-MM-DD; Story is the plain article headline (no markdown); URL is the bare article URL; Outlet, What happened, How it ended, Themes and Place are the same text as in the doc row.
+- Skip any story whose URL is already in the CSV. If that leaves no rows to add, do not commit.
+- Do not change existing rows (including any existing "No qualifying stories" rows). Do not create, edit or delete any other file in the repository.
+- Then: git config user.name "Claude"; git config user.email "noreply@anthropic.com"; git add resilience-log.csv; git commit -m "Update resilience log YYYY-MM-DD" (today's date); git push origin master.
+- If the repo cannot be attached, cloned or pushed to, do not retry in a loop and do not use another route: the doc stays updated, and the failure goes in the final message (see FINISH).
+
+5. FINISH with:
+- One line: how many stories were added, their headlines, themes and places.
+- One line on the CSV: rows added and pushed to hiya-g/Test, or "CSV not touched: no new stories", or "CSV not updated: <reason>".
+- FLAG FOR REVIEW: any emerging themes as described above, or "No new themes" if none.
+- If any outlet's feed failed to load this run, name it in one extra line.
