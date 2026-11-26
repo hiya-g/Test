@@ -81,7 +81,7 @@ The existing undowned.stories table is already provisioned. Its verified existin
 - published_at timestamptz NULL
 - tags text[] NOT NULL
 - sources jsonb[] NOT NULL
-- active boolean NOT NULL DEFAULT false
+- active boolean NOT NULL DEFAULT false (currently verified live default; explicitly override it in every INSERT using the ACTIVE FLAG RULE)
 - slug text NOT NULL DEFAULT ''::text UNIQUE, with CHECK (length(slug) <= 60)
 - excerpt text NOT NULL with a database default (populate with a concise, factual article excerpt; do not rely on the placeholder default)
 - place text NULL, with CHECK (length(place) < 120)
@@ -164,6 +164,7 @@ Insert exactly one row per eligible story into undowned.stories, using only thes
   [{"publication":"Original News Outlet","url":"https://example.com/original-report"},{"publication":"Additional Reporting","url":"https://example.com/verification"}]
   This sources array is the sole database field for source publications and URLs. Do not try to write or read a missing source-URL column.
 - tags: PostgreSQL text[] with one theme per array element. Never put all themes into one string or a semicolon-delimited value. All themes supplied by the source must be added. Skip none.
+- active: explicitly include this boolean in every INSERT; never rely on the database default. Set active = true only when the original CSV Themes field contains at least one non-empty supplied theme. Set active = false when the original CSV Themes field is blank or missing. Determine this from the original source field before deriving fallback tags. If the source Themes field is blank, continue deriving 2–4 factual tags for the required non-empty tags array under the existing TAG RULE and TAG INSERT SAFEGUARD, but keep active = false. If one or more source themes are supplied, preserve them verbatim in tags and set active = true.
 - updated_at: NULL for a newly inserted row.
 - published_at: NULL unless an actual publication timestamp is explicitly provided by a trusted source or the user.
 Do not provide id or created_at; let their existing database defaults generate them. Always provide a non-empty, validated slug explicitly. Do not add, remove, or rename columns.
@@ -358,6 +359,11 @@ When processing these candidates, preserve the user-supplied assigned dates and 
 TAG INSERT SAFEGUARD — REQUIRED, WITHOUT CHANGING THE NULLABLE COLUMN
 The tags column is an existing PostgreSQL text[] NOT NULL column. Do not change its definition or alter the schema. Every inserted story must have a non-empty tags array.
 
+ACTIVE FLAG RULE — EXPLICIT VALUE REQUIRED ON EVERY INSERT
+The active column is boolean NOT NULL. The currently verified live database default is false, so never rely on the database default. Explicitly include active in every new-story INSERT. Set active = true only when the original CSV Themes field contains at least one non-empty supplied theme. Set active = false when the original CSV Themes field is blank or missing. Decide this from the original source field before deriving fallback tags. A story with no supplied source theme remains inactive even when 2–4 derived factual tags are added to satisfy the tags NOT NULL requirement. Stories with one or more supplied source themes are active. Do not change active on existing rows during routine ingestion.
+
+Before INSERT, validate that active matches the original CSV Themes field exactly under this rule. After INSERT, read active back from undowned.stories and verify it matches the expected value. A mismatch is an insertion verification failure; report it and do not silently claim success.
+
 Apply this row-mapping safeguard before every INSERT:
 1. If the source-list entry supplies one or more themes/tags, copy every supplied theme verbatim, preserving wording, capitalization, and order. Store them as separate elements in a non-empty PostgreSQL text[] array. In this case, tags MUST NOT be NULL or an empty array.
 2. If the source-list entry supplies no themes, derive 2–4 concise factual tags supported by the verified reporting. Store them as separate text[] elements.
@@ -365,5 +371,38 @@ Apply this row-mapping safeguard before every INSERT:
 4. Never put multiple themes into one array element separated by semicolons or commas.
 5. Before INSERT, validate the prepared row: if supplied themes exist, confirm that tags is non-null, non-empty, and matches all supplied themes exactly. If this check fails, stop that story's insertion, report the tag-mapping error, and do not insert an incomplete row.
 6. After INSERT, read the stored tags back from undowned.stories. Compare them with the expected array. If supplied themes were present, verify that every theme was stored verbatim in its own element. Report any mismatch as an insertion verification failure; do not silently claim success.
-7. This safeguard applies to new story ingestion only. Do not backfill or update tags on existing rows unless the user explicitly requests that correction. During routine ingestion, do not update existing records.
-8. The tags column is NOT NULL in the current verified schema. This safeguard enforces the existing database requirement; do not make schema changes.
+7. Validate active separately from derived tags: active must be true if and only if the original CSV Themes field contained at least one non-empty supplied theme. If the source Themes field was blank or missing, active must be false even when fallback tags were derived. Read active back after INSERT and verify it.
+8. Do not update active or tags on existing rows during routine ingestion. Existing rows may be changed only when the user explicitly requests that correction.
+9. This safeguard applies to new story ingestion only. Do not backfill or update tags on existing rows unless the user explicitly requests that correction. During routine ingestion, do not update existing records.
+10. The tags column is NOT NULL in the current verified schema. This safeguard enforces the existing database requirement; do not make schema changes.
+
+
+AUTOMATION LIFECYCLE — STRICT NON-DISABLE RULE (HIGHEST PRIORITY)
+
+This is a recurring daily task. It MUST remain enabled after every run.
+
+1. Never pause, disable, deactivate, stop, cancel, delete, archive, complete, or otherwise change this automation's enabled state, recurrence, schedule, or next-run configuration as part of a run.
+2. A successful run, failed run, no qualifying stories, source or checkpoint problem, inaccessible article, research limitation, database error, or any other outcome is NEVER a reason to pause or disable this automation.
+3. Do not self-modify this automation. Do not call, request, or instruct any automation-management tool, agent, or external service to pause, disable, cancel, delete, or reschedule it.
+4. At the end of each run, finish with the report only. Leave the recurring daily schedule and enabled state unchanged so the next scheduled run can proceed.
+5. Only the user may explicitly request a change to this automation's enabled state, schedule, recurrence, or deletion. Do not interpret a completed run or an operational problem as such a request.
+6. If the task cannot complete safely, report the exact blocker, preserve the source cursor as required, make no unsafe database changes, and leave this automation enabled and scheduled.
+7. Never claim that the automation is enabled, disabled, paused, or scheduled without checking its actual saved automation state.
+
+DATABASE SCHEMA REVISION — source_note COLUMN (SUPERSEDES OLDER SCHEMA LISTS)
+
+The user has supplied the current table definition for the fixed target undowned.stories. The table now includes this additional existing nullable column:
+- source_note text NULL, with CHECK (length(source_note) < 200).
+
+This is a user-reported schema update, not permission to change the database. Do not run DDL or migrations. Continue using only project ref yepisxmfhpjjotxxpugj and the exact table undowned.stories.
+
+1. Before every write, perform the required read-only project/table/column check against the current schema, including source_note. If the live schema does not match the user-supplied definition, stop without writing.
+2. The permitted insert-column allowlist is now: headline, slug, reported_date, place, excerpt, image_url, image_alt, image_verified, full_story_text, sources, tags, active, updated_at, published_at, and source_note. The database still generates id and created_at; never supply them.
+3. source_note is an optional, separate attribution/provenance field. Write a short source description based on the primary article, including the original outlet name, the original article/report headline (the reported title), and the original publication or updated date. Include the reporter/byline name when verified and space permits. Use a concise format modeled on: "Based on CBS News' report “Kicker, told to amputate leg after cancer diagnosis, beats the odds to resume pro sports career” by Kerry Breen, updated 21 November 2026." This is a format example only; use the actual verified outlet, headline, byline, and date for each story, never copy the example details into unrelated records. Label the date accurately as published or updated; do not treat the CSV reported_date as the article publication date. Keep source_note strictly below 200 characters to satisfy the database CHECK. Prefer a concise faithful headline/title if needed to fit; do not exceed the limit. If the outlet, headline, or article date cannot be verified, or a truthful note cannot fit, use NULL rather than inventing or misleadingly omitting essential details. Never invent or infer a byline or date. Do not put URLs in source_note; all source URLs remain exclusively in sources as JSONB objects with exactly publication and url keys.
+4. Keep source_note separate from full_story_text. Do not append source notes, source paragraphs, credit footers, or equivalent attribution text to the narrative. The existing prohibition against attribution footers in full_story_text remains in force.
+5. Include source_note in INSERT statements when inserting a row, using either the verified concise note or NULL. It is optional and must never block an otherwise valid story solely because some attribution metadata is unavailable.
+6. Include source_note in post-insert verification and report its stored value.
+7. The currently supplied table definition shows active boolean NOT NULL DEFAULT true. This supersedes older descriptions of its database default. Nevertheless, always explicitly supply active in every INSERT and continue to apply the existing ACTIVE FLAG RULE based on whether the original source Themes field contains at least one non-empty supplied theme. Never rely on the database default.
+8. The current supplied table definition retains all other previously listed columns and constraints, including slug uniqueness and length <= 60, place length < 120, and source_note length < 200. Re-check the complete live schema before writing; do not assume the DDL supplied in conversation is a substitute for the live read-only check.
+
+This schema revision supersedes all older statements that the table has no source_note column or no dedicated optional attribution field. Do not remove or weaken any existing source, editorial, duplicate-check, cursor, slug, tag, active-flag, image, database-safety, verification, or automation-lifecycle rule.
